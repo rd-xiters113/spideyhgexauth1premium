@@ -1,0 +1,6 @@
+{
+  "name": "Spidy Auth",
+  "description": "Enterprise-grade authentication, licensing, and subscription management SaaS platform with multi-tenant application control, HWID locking, and admin allowlists.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

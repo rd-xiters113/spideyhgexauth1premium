@@ -1,0 +1,136 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'romaanchudary1@gmail.com'
+      );
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      
+      // User can create their initial profile with FREE plan and 0 keys used
+      allow create: if isSignedIn() && (
+        isAdmin() || (
+          request.auth.uid == userId &&
+          request.resource.data.id == userId &&
+          request.resource.data.plan == 'FREE' &&
+          request.resource.data.keysUsed == 0 &&
+          request.resource.data.maxKeysQuota == 50 &&
+          request.resource.data.role == 'user'
+        )
+      );
+
+      // User cannot elevate their plan, quota, or role; only quota increments on license creation
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          request.auth.uid == userId &&
+          request.resource.data.id == userId &&
+          request.resource.data.plan == resource.data.plan &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.maxKeysQuota == resource.data.maxKeysQuota &&
+          request.resource.data.keysUsed >= resource.data.keysUsed &&
+          request.resource.data.keysUsed <= resource.data.maxKeysQuota
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Applications Collection
+    match /applications/{appId} {
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          resource.data.ownerId == request.auth.uid &&
+          request.resource.data.ownerId == resource.data.ownerId
+        )
+      );
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // License Keys Collection
+    match /license_keys/{keyId} {
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // Credentials Collection
+    match /credentials/{credId} {
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // Premium Allowlist Collection (Only admins can manage, authenticated users can check their own email)
+    match /premium_allowlist/{allowId} {
+      allow get: if isSignedIn() && (resource.data.email == request.auth.token.email || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Upgrade Requests Collection
+    match /upgrade_requests/{reqId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Resellers Collection
+    match /resellers/{resellerId} {
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // Activity Logs Collection
+    match /activity_logs/{logId} {
+      allow get: if isSignedIn() && (resource.data.actorId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.actorId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.actorId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+  }
+}
